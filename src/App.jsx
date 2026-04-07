@@ -70,19 +70,20 @@ export default function App() {
   }, [peerIds])
 
   // ── Peer marker click (opens detail modal) ────────────────────────────────
-  const onPeerMarkerClick = useCallback(async (id) => {
+  const onPeerMarkerClick = useCallback(async (id, isDimmed = false) => {
     if (detailCacheRef.current[id]) {
-      setDetailModal(detailCacheRef.current[id])
+      setDetailModal({ ...detailCacheRef.current[id], isDimmed })
       return
     }
     setModalLoading(true)
-    setDetailModal({ id, _loading: true })
+    setDetailModal({ id, _loading: true, isDimmed })
     try {
       const detail = await fetchEntityDetail(id)
       detailCacheRef.current[id] = detail
-      setDetailModal(detail)
+      setDetailModal({ ...detail, isDimmed })
     } catch (err) {
       console.error(err)
+      setDetailModal({ id, error: err.message, isDimmed })
     } finally {
       setModalLoading(false)
     }

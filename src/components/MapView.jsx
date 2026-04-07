@@ -63,8 +63,8 @@ export default function MapView({
         // In peer mode: route to peer handler; otherwise normal handler
         const isPeer = peerIds?.has(entity.id) || entity.id === selectedId
         if (onMapClickRef.current === null) {
-          // peerMode — only respond to peer/selected markers
-          if (isPeer) onPeerMarkerClickRef.current?.(entity.id)
+          // peerMode — respond to any click, but flag if dimmed
+          onPeerMarkerClickRef.current?.(entity.id, !isPeer)
         } else {
           onMarkerClickRef.current?.(entity.id)
         }

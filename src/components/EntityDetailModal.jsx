@@ -105,6 +105,18 @@ export default function EntityDetailModal({ entity, loading, schema, onClose }) 
           </button>
         </div>
 
+        {/* ── Status Banner (Outside scope / Error) ── */}
+        {!isLoading && entity.isDimmed && (
+          <div className="detail-banner detail-banner-warning">
+            Note: This location is outside the currently explored area.
+          </div>
+        )}
+        {!isLoading && entity.error && (
+          <div className="detail-banner detail-banner-error">
+            Failed to retrieve details: {entity.error}
+          </div>
+        )}
+
         {/* ── Breadcrumb ── */}
         {crumbs.length > 0 && (
           <div className="detail-crumb">
@@ -142,10 +154,12 @@ export default function EntityDetailModal({ entity, loading, schema, onClose }) 
         )}
 
         {/* ── No metadata ── */}
-        {!isLoading && groups.length === 0 && (
-          <div className="detail-empty">
-            <p>No extra fields for this entity.</p>
-            <p className="detail-empty-hint">Upload a CSV with extra columns to see data here.</p>
+        {!isLoading && !entity.error && groups.length === 0 && (
+          <div className="detail-empty animate-fade-in">
+            <div className="empty-state-icon">📄</div>
+            <h3>No information found</h3>
+            <p>This location has no extra fields associated with it.</p>
+            <p className="detail-empty-hint">To view more data, upload a CSV containing additional columns.</p>
           </div>
         )}
 

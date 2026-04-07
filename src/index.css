@@ -636,3 +636,36 @@ html, body, #root {
   .field-grid-2, .field-grid-auto { grid-template-columns: 1fr 1fr; }
   .detail-entity-id { font-size: 18px; }
 }
+
+.detail-banner {
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 10px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+}
+.detail-banner-warning {
+  background: rgba(249, 199, 79, 0.1);
+  border-left-color: #f9c74f;
+  color: #f9c74f;
+}
+.detail-banner-error {
+  background: rgba(255, 107, 107, 0.1);
+  border-left-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+.empty-state-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+.detail-empty h3 {
+  font-size: 16px;
+  color: var(--text);
+  margin: 0 0 6px;
+  font-weight: 500;
+}
+.detail-empty p {
+  margin: 0;
+}
