@@ -1,0 +1,56 @@
+name: Deploy Frontend to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - frontend/**
+      - .github/workflows/deploy_frontend_to_hf_space.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_FRONTEND_BD_LOCATION }}
+          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
+        run: |
+          test -n "$HF_TOKEN" || (echo "Missing secret: HF_TOKEN" && exit 1)
+          test -n "$HF_SPACE_REPO" || (echo "Missing secret: HF_SPACE_REPO" && exit 1)
+
+      - name: Push frontend to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_FRONTEND_BD_LOCATION }}
+          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
+        run: |
+          set -euo pipefail
+
+          SPACE_DIR="$(mktemp -d)"
+
+          git clone "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}" "$SPACE_DIR"
+
+          rsync -av --delete \
+            --exclude ".git" \
+            --exclude "node_modules" \
+            --exclude "dist" \
+            --exclude ".DS_Store" \
+            frontend/ "$SPACE_DIR"/
+
+          cd "$SPACE_DIR"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add -A
+            git commit -m "Deploy frontend from GitHub Actions"
+            git push origin main
+          else
+            echo "No frontend changes to deploy."
+          fi
