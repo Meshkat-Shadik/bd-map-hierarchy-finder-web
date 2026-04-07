@@ -57,7 +57,7 @@ export default function MapView({
     const renderer = L.canvas({ padding: 0.5 })
     for (const entity of Object.values(entities)) {
       const m = L.circleMarker([entity.lat, entity.lng], { renderer, ...STYLE.default })
-      m.bindTooltip(entity.id, { direction: 'top', offset: [0, -5], opacity: 0.9 })
+      m.bindTooltip(entity.label || entity.id, { direction: 'top', offset: [0, -5], opacity: 0.9 })
       m.on('click', e => {
         L.DomEvent.stopPropagation(e)
         // In peer mode: route to peer handler; otherwise normal handler

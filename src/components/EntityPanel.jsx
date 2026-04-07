@@ -1,4 +1,5 @@
-import { X } from './Icons'
+import { useState } from 'react'
+import { X, Info } from './Icons'
 
 const DISPLAY_LEVELS = ['division', 'district', 'upazila', 'union', 'mauza']
 
@@ -7,19 +8,33 @@ function hasRealName(level, h) {
   return entry?.name && entry.name !== entry.geocode
 }
 
+// Explain geocode length → admin level
+function geocodeLevelName(len) {
+  if (len === 2)  return 'Division'
+  if (len === 4)  return 'District'
+  if (len === 6)  return 'City Corporation'
+  if (len === 8)  return 'Upazila'
+  if (len === 10) return 'Municipality'
+  if (len === 13) return 'Union'
+  if (len === 16) return 'Mauza'
+  if (len === 20) return 'Village'
+  if (len === 22) return 'Enumeration Area (EA)'
+  return 'Location'
+}
+
 export default function EntityPanel({
   open, entity, selectedId, activeLevel,
-  peerMeta, peerLoading, peerMode, areaStats, schema,
+  peerMeta, peerLoading, peerMode,
   onLevelSelect, onClose, onExitPeerMode, onToggle,
 }) {
+  const [geocodeOpen, setGeocodeOpen] = useState(false)
+
   const h      = entity?.hierarchy ?? {}
   const crumbs = DISPLAY_LEVELS.filter(l => hasRealName(l, h)).map(l => h[l].name)
   const tabs   = DISPLAY_LEVELS.filter(l => h[l])
 
-  // Numeric fields that have stats
-  const statFields = areaStats
-    ? Object.entries(areaStats).filter(([, v]) => v && typeof v.sum === 'number')
-    : []
+  const gc     = entity?.geocode ?? ''
+  const gcLevel = geocodeLevelName(gc.length)
 
   return (
     <div className={`panel ${open ? 'panel-open' : ''}`}>
@@ -36,7 +51,23 @@ export default function EntityPanel({
             {entity ? (
               <div className="entity-meta">
                 <span className="coord">{entity.lat.toFixed(5)}°N, {entity.lng.toFixed(5)}°E</span>
-                <code className="geocode">{entity.geocode}</code>
+                <div className="geocode-row">
+                  <code className="geocode">{entity.geocode}</code>
+                  <button
+                    className="btn-geocode-info"
+                    onClick={() => setGeocodeOpen(v => !v)}
+                    aria-label="What is this code?"
+                  >
+                    <Info size={12} />
+                  </button>
+                </div>
+                {geocodeOpen && (
+                  <div className="geocode-popover">
+                    <strong>BD Administrative Geocode</strong>
+                    <p>A {gc.length}-character code identifying this location at the <strong>{gcLevel}</strong> level in Bangladesh's administrative hierarchy.</p>
+                    <p className="geocode-popover-levels">2=Division · 4=District · 8=Upazila · 13=Union · 16=Mauza · 22=EA</p>
+                  </div>
+                )}
               </div>
             ) : selectedId ? (
               <div className="entity-meta loading-pulse">Fetching details…</div>
@@ -92,22 +123,6 @@ export default function EntityPanel({
           </div>
         )}
 
-        {/* Area stats — numeric fields */}
-        {statFields.length > 0 && (
-          <div className="area-stats animate-fade-in">
-            <p className="section-label" style={{marginTop: '14px'}}>Area Summary</p>
-            <div className="stats-grid">
-              {statFields.map(([field, s]) => (
-                <div key={field} className="stat-card">
-                  <div className="stat-label">{formatFieldLabel(field)}</div>
-                  <div className="stat-value">{formatNumber(s.sum)}</div>
-                  <div className="stat-sub">avg {formatNumber(s.avg)} · {s.count} entries</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Peer mode hint */}
         {peerMode && !peerLoading && (
           <div className="peer-hint animate-fade-in">
@@ -122,13 +137,3 @@ export default function EntityPanel({
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1) }
-
-function formatFieldLabel(key) {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function formatNumber(n) {
-  if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
-  if (Math.abs(n) >= 1_000)     return (n / 1_000).toFixed(1) + 'K'
-  return n.toLocaleString()
-}

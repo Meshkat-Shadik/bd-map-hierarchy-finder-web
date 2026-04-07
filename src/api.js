@@ -22,10 +22,11 @@ export const fetchAreaStats = (geocode) => get(`/area/${encodeURIComponent(geoco
 
 export const fetchStatus = () => get('/status')
 
-export async function uploadCSV(file, extraFields = []) {
+export async function uploadCSV(file, extraFields = [], displayField = 'id') {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('extra_fields', JSON.stringify(extraFields))
+  fd.append('display_field', displayField)
   const res  = await fetch(`${BASE}/upload`, { method: 'POST', body: fd })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail ?? data.error ?? 'Upload failed')

@@ -43,6 +43,7 @@ export default function UploadModal({ open, onClose, onSuccess }) {
   const [csvRowCount,  setCsvRowCount]  = useState(0)
   const [csvLines,     setCsvLines]     = useState([])
   const [selected,     setSelected]     = useState(new Set())  // extra fields user wants
+  const [displayField, setDisplayField] = useState('id')       // field to show as label
   const [issues,       setIssues]       = useState([])
   const [progress,     setProgress]     = useState(0)
   const [statusText,   setStatusText]   = useState('')
@@ -56,7 +57,7 @@ export default function UploadModal({ open, onClose, onSuccess }) {
 
   function reset() {
     setStep('pick'); setCsvFile(null); setCsvHeaders([]); setCsvRowCount(0)
-    setCsvLines([]); setSelected(new Set()); setIssues([])
+    setCsvLines([]); setSelected(new Set()); setDisplayField('id'); setIssues([])
     setProgress(0); setStatusText(''); setError('')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -92,6 +93,9 @@ export default function UploadModal({ open, onClose, onSuccess }) {
       // Auto-select all non-reserved columns
       const autoExtra = new Set(headers.filter(h => !RESERVED.has(h.toLowerCase())))
       setSelected(autoExtra)
+      // Set default display field to 'id' if it exists, otherwise first header
+      const defaultDisplay = headers.find(h => h.toLowerCase() === 'id') || headers[0] || 'id'
+      setDisplayField(defaultDisplay)
       setStep('schema')
     }
     reader.readAsText(file)
@@ -118,7 +122,7 @@ export default function UploadModal({ open, onClose, onSuccess }) {
   async function startUpload() {
     setStep('uploading'); setProgress(15); setStatusText('Uploading file…')
     try {
-      await uploadCSV(csvFile, [...selected])
+      await uploadCSV(csvFile, [...selected], displayField)
       setProgress(40); setStatusText('Building index…')
       await pollBuild()
       setProgress(100); setStatusText('Done! Reloading map…')
@@ -158,8 +162,10 @@ export default function UploadModal({ open, onClose, onSuccess }) {
   const selectedArr  = [...selected]
   const okRows       = csvRowCount - issues.length
 
+  if (!open) return null
+
   return (
-    <div className={`modal-backdrop ${open ? 'modal-open' : ''}`}
+    <div className="modal-backdrop modal-open"
       onClick={e => e.target === e.currentTarget && handleClose()}>
       <div className="modal upload-modal" role="dialog" aria-modal="true">
 
@@ -247,9 +253,49 @@ export default function UploadModal({ open, onClose, onSuccess }) {
                 <div className="schema-hint">
                   {selectedArr.length} field{selectedArr.length !== 1 ? 's' : ''} selected
                 </div>
+
+                {/* Display Field Selector */}
+                <div className="schema-section-label" style={{marginTop:'20px'}}>
+                  Label field — shown on map markers
+                </div>
+                <div className="display-field-selector">
+                  <select 
+                    value={displayField} 
+                    onChange={(e) => setDisplayField(e.target.value)}
+                    className="display-field-select"
+                  >
+                    {csvHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <div className="display-field-hint">
+                    This field will appear as the location label on the map
+                  </div>
+                </div>
               </>
             ) : (
-              <p className="schema-no-extra">No extra columns detected. Only lat/lng/id will be stored.</p>
+              <>
+                <p className="schema-no-extra">No extra columns detected. Only lat/lng/id will be stored.</p>
+                
+                {/* Display Field Selector for when there are no extra fields */}
+                <div className="schema-section-label" style={{marginTop:'20px'}}>
+                  Label field — shown on map markers
+                </div>
+                <div className="display-field-selector">
+                  <select 
+                    value={displayField} 
+                    onChange={(e) => setDisplayField(e.target.value)}
+                    className="display-field-select"
+                  >
+                    {csvHeaders.map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <div className="display-field-hint">
+                    This field will appear as the location label on the map
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="modal-actions">
