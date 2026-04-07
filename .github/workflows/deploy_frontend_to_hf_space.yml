@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - frontend/**
+      - '**'
       - .github/workflows/deploy_frontend_to_hf_space.yml
   workflow_dispatch:
 
@@ -37,10 +37,11 @@ jobs:
 
           rsync -av --delete \
             --exclude ".git" \
+            --exclude ".github" \
             --exclude "node_modules" \
             --exclude "dist" \
             --exclude ".DS_Store" \
-            frontend/ "$SPACE_DIR"/
+            ./ "$SPACE_DIR"/
 
           cd "$SPACE_DIR"
 
