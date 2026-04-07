@@ -4,21 +4,25 @@ import L from 'leaflet'
 const STYLE = {
   default:  { radius: 5, fillColor: '#4ecdc4', color: 'transparent', fillOpacity: 0.8,  weight: 0 },
   selected: { radius: 8, fillColor: '#f9c74f', color: '#fff',        fillOpacity: 1,    weight: 1.5 },
-  peer:     { radius: 5, fillColor: '#ff6b6b', color: 'transparent', fillOpacity: 0.9,  weight: 0 },
-  dim:      { radius: 4, fillColor: '#2d3139', color: 'transparent', fillOpacity: 0.5,  weight: 0 },
+  peer:     { radius: 6, fillColor: '#ff6b6b', color: 'rgba(255,107,107,0.3)', fillOpacity: 0.9, weight: 2 },
+  dim:      { radius: 4, fillColor: '#2d3139', color: 'transparent', fillOpacity: 0.4,  weight: 0 },
 }
 
-export default function MapView({ entities, selectedId, peerIds, dimMode, onMarkerClick, onMapClick }) {
+export default function MapView({
+  entities, selectedId, peerIds, peerMode,
+  onMarkerClick, onPeerMarkerClick, onMapClick,
+}) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
   const layerRef     = useRef(null)
   const markersRef   = useRef({})
 
-  // Stable callback refs — avoids re-creating markers when callbacks change
-  const onMarkerClickRef = useRef(onMarkerClick)
-  const onMapClickRef    = useRef(onMapClick)
-  useLayoutEffect(() => { onMarkerClickRef.current = onMarkerClick })
-  useLayoutEffect(() => { onMapClickRef.current = onMapClick })
+  const onMarkerClickRef     = useRef(onMarkerClick)
+  const onPeerMarkerClickRef = useRef(onPeerMarkerClick)
+  const onMapClickRef        = useRef(onMapClick)
+  useLayoutEffect(() => { onMarkerClickRef.current     = onMarkerClick })
+  useLayoutEffect(() => { onPeerMarkerClickRef.current = onPeerMarkerClick })
+  useLayoutEffect(() => { onMapClickRef.current        = onMapClick })
 
   // ── Init map once ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -40,8 +44,7 @@ export default function MapView({ entities, selectedId, peerIds, dimMode, onMark
     map.on('click', () => onMapClickRef.current?.())
 
     layerRef.current = L.layerGroup().addTo(map)
-    mapRef.current = map
-
+    mapRef.current   = map
     return () => map.remove()
   }, [])
 
@@ -52,30 +55,45 @@ export default function MapView({ entities, selectedId, peerIds, dimMode, onMark
     markersRef.current = {}
 
     const renderer = L.canvas({ padding: 0.5 })
-
     for (const entity of Object.values(entities)) {
       const m = L.circleMarker([entity.lat, entity.lng], { renderer, ...STYLE.default })
       m.bindTooltip(entity.id, { direction: 'top', offset: [0, -5], opacity: 0.9 })
-      m.on('click', e => { L.DomEvent.stopPropagation(e); onMarkerClickRef.current(entity.id) })
+      m.on('click', e => {
+        L.DomEvent.stopPropagation(e)
+        // In peer mode: route to peer handler; otherwise normal handler
+        const isPeer = peerIds?.has(entity.id) || entity.id === selectedId
+        if (onMapClickRef.current === null) {
+          // peerMode — only respond to peer/selected markers
+          if (isPeer) onPeerMarkerClickRef.current?.(entity.id)
+        } else {
+          onMarkerClickRef.current?.(entity.id)
+        }
+      })
       layerRef.current.addLayer(m)
       markersRef.current[entity.id] = m
     }
   }, [entities])
 
+  // ── Re-bind click handler when peerMode changes (without rebuilding markers)
+  // We use a ref-based approach so this just re-checks on next click naturally.
+  // Nothing extra needed — the click handler already reads the latest refs.
+
   // ── Re-style markers on selection / peer change ───────────────────────────
   useEffect(() => {
+    const dimMode = peerIds !== null
     for (const [id, m] of Object.entries(markersRef.current)) {
-      if (id === selectedId) {
-        m.setStyle(STYLE.selected).bringToFront()
-      } else if (peerIds?.has(id)) {
-        m.setStyle(STYLE.peer)
-      } else if (dimMode) {
-        m.setStyle(STYLE.dim)
-      } else {
-        m.setStyle(STYLE.default)
-      }
+      if (id === selectedId)   { m.setStyle(STYLE.selected).bringToFront() }
+      else if (peerIds?.has(id)) { m.setStyle(STYLE.peer) }
+      else if (dimMode)          { m.setStyle(STYLE.dim) }
+      else                       { m.setStyle(STYLE.default) }
     }
-  }, [selectedId, peerIds, dimMode])
+  }, [selectedId, peerIds])
+
+  // ── Cursor: pointer on peer markers when in peer mode ─────────────────────
+  useEffect(() => {
+    if (!mapRef.current) return
+    mapRef.current.getContainer().style.cursor = peerMode ? 'default' : ''
+  }, [peerMode])
 
   // ── Pan to selected entity ────────────────────────────────────────────────
   useEffect(() => {

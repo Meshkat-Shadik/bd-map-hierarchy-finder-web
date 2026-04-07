@@ -2,17 +2,11 @@ const BASE = 'https://meshkatshadik-bd-hierarchy-location-finder.hf.space'
 
 export async function loadAllEntities() {
   const { areas } = await get('/areas?level=division')
-
-  const results = await Promise.all(
-    areas.map(a => get(`/area/${a.geocode}?limit=10000`))
-  )
-
-  const entities = {}
-  for (const r of results) {
-    for (const e of r.entities ?? []) {
+  const results   = await Promise.all(areas.map(a => get(`/area/${a.geocode}?limit=10000`)))
+  const entities  = {}
+  for (const r of results)
+    for (const e of r.entities ?? [])
       entities[e.id] = e
-    }
-  }
   return entities
 }
 
@@ -22,12 +16,17 @@ export const fetchEntityDetail = (id) =>
 export const fetchPeers = (id, level) =>
   get(`/entity/${encodeURIComponent(id)}/peers?level=${level}&limit=10000`)
 
+export const fetchSchema = () => get('/schema')
+
+export const fetchAreaStats = (geocode) => get(`/area/${encodeURIComponent(geocode)}/stats`)
+
 export const fetchStatus = () => get('/status')
 
-export async function uploadCSV(file) {
+export async function uploadCSV(file, extraFields = []) {
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(`${BASE}/upload`, { method: 'POST', body: fd })
+  fd.append('extra_fields', JSON.stringify(extraFields))
+  const res  = await fetch(`${BASE}/upload`, { method: 'POST', body: fd })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail ?? data.error ?? 'Upload failed')
   return data

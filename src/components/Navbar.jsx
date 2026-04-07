@@ -1,6 +1,6 @@
 import { RotateCcw, Upload } from './Icons'
 
-export default function Navbar({ entityCount, peerMeta, onReset, onUploadClick }) {
+export default function Navbar({ entityCount, peerMeta, peerMode, onReset, onExitPeerMode, onUploadClick }) {
   return (
     <nav className="navbar">
       <div className="nav-brand">
@@ -23,9 +23,15 @@ export default function Navbar({ entityCount, peerMeta, onReset, onUploadClick }
       </div>
 
       <div className="nav-actions">
-        <button className="btn-icon" onClick={onReset} title="Reset view">
-          <RotateCcw size={15} />
-        </button>
+        {peerMode ? (
+          <button className="btn-exit" onClick={onExitPeerMode} title="Exit explore mode">
+            ✕ Exit explore
+          </button>
+        ) : (
+          <button className="btn-icon" onClick={onReset} title="Reset view">
+            <RotateCcw size={15} />
+          </button>
+        )}
         <button className="btn-primary" onClick={onUploadClick}>
           <Upload size={14} />
           Upload CSV
