@@ -47,7 +47,7 @@ export default function EntityPanel({
         {/* Header */}
         <div className="panel-header">
           <div>
-            <div className="entity-id">{entity?.id ?? selectedId ?? '—'}</div>
+            <div className="entity-id">{entity?.label ?? entity?.id ?? selectedId ?? '—'}</div>
             {entity ? (
               <div className="entity-meta">
                 <span className="coord">{entity.lat.toFixed(5)}°N, {entity.lng.toFixed(5)}°E</span>

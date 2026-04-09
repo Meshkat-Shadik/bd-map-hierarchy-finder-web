@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, Upload } from './Icons'
-import { uploadCSV, fetchStatus } from '../api'
+import { uploadCSV } from '../api'
+import { saveCSV } from '../csvStore'
 
 // ── Minimal browser CSV parser ────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -26,9 +27,9 @@ function readCSVMeta(text) {
 function validateCSV(lines, headers, extraFields) {
   const issues = []
   for (let i = 1; i < lines.length; i++) {
-    const vals     = parseCSVLine(lines[i])
-    const rowObj   = Object.fromEntries(headers.map((h, j) => [h, vals[j] ?? '']))
-    const missing  = extraFields.filter(f => !rowObj[f]?.trim())
+    const vals    = parseCSVLine(lines[i])
+    const rowObj  = Object.fromEntries(headers.map((h, j) => [h, vals[j] ?? '']))
+    const missing = extraFields.filter(f => !rowObj[f]?.trim())
     if (missing.length) issues.push({ row: i + 1, missing })
   }
   return issues
@@ -36,24 +37,30 @@ function validateCSV(lines, headers, extraFields) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function UploadModal({ open, onClose, onSuccess }) {
-  // step: 'pick' | 'schema' | 'validate' | 'uploading'
-  const [step,         setStep]         = useState('pick')
-  const [csvFile,      setCsvFile]      = useState(null)
-  const [csvHeaders,   setCsvHeaders]   = useState([])
-  const [csvRowCount,  setCsvRowCount]  = useState(0)
-  const [csvLines,     setCsvLines]     = useState([])
-  const [selected,     setSelected]     = useState(new Set())  // extra fields user wants
-  const [displayField, setDisplayField] = useState('id')       // field to show as label
-  const [issues,       setIssues]       = useState([])
-  const [progress,     setProgress]     = useState(0)
-  const [statusText,   setStatusText]   = useState('')
-  const [error,        setError]        = useState('')
+  // step: 'pick' | 'schema' | 'validate' | 'processing'
+  const [step,        setStep]        = useState('pick')
+  const [csvFile,     setCsvFile]     = useState(null)
+  const [csvHeaders,  setCsvHeaders]  = useState([])
+  const [csvRowCount, setCsvRowCount] = useState(0)
+  const [csvLines,    setCsvLines]    = useState([])
+  const [selected,    setSelected]    = useState(new Set())
+  const [displayField,setDisplayField]= useState('id')
+  const [issues,      setIssues]      = useState([])
+  const [progress,    setProgress]    = useState(0)
+  const [statusText,  setStatusText]  = useState('')
+  const [error,       setError]       = useState('')
 
   const fileInputRef = useRef(null)
   const dropRef      = useRef(null)
 
-  // Required columns — always excluded from the "extra" list
   const RESERVED = new Set(['id', 'lat', 'lng', 'latitude', 'longitude', 'lon', 'long'])
+
+  // Auto-trigger upload when step changes to 'processing'
+  useEffect(() => {
+    if (step === 'processing' && progress === 0) {
+      startServerUpload()
+    }
+  }, [step])
 
   function reset() {
     setStep('pick'); setCsvFile(null); setCsvHeaders([]); setCsvRowCount(0)
@@ -63,7 +70,7 @@ export default function UploadModal({ open, onClose, onSuccess }) {
   }
 
   function handleClose() {
-    if (step === 'uploading') return
+    if (step === 'processing') return
     reset(); onClose()
   }
 
@@ -90,12 +97,11 @@ export default function UploadModal({ open, onClose, onSuccess }) {
       setCsvHeaders(headers)
       setCsvRowCount(rowCount)
       setCsvLines(lines)
-      // Auto-select all non-reserved columns
       const autoExtra = new Set(headers.filter(h => !RESERVED.has(h.toLowerCase())))
       setSelected(autoExtra)
-      // Set default display field to 'id' if it exists, otherwise first header
       const defaultDisplay = headers.find(h => h.toLowerCase() === 'id') || headers[0] || 'id'
       setDisplayField(defaultDisplay)
+
       setStep('schema')
     }
     reader.readAsText(file)
@@ -112,42 +118,37 @@ export default function UploadModal({ open, onClose, onSuccess }) {
 
   // ── Step 3: validate ───────────────────────────────────────────────────────
   function runValidation() {
-    const extraArr  = [...selected]
-    const foundIssues = validateCSV(csvLines, csvHeaders, extraArr)
+    const extraArr     = [...selected]
+    const foundIssues  = validateCSV(csvLines, csvHeaders, extraArr)
     setIssues(foundIssues)
     setStep('validate')
   }
 
-  // ── Step 4: upload ─────────────────────────────────────────────────────────
-  async function startUpload() {
-    setStep('uploading'); setProgress(15); setStatusText('Uploading file…')
-    try {
-      await uploadCSV(csvFile, [...selected], displayField)
-      setProgress(40); setStatusText('Building index…')
-      await pollBuild()
-      setProgress(100); setStatusText('Done! Reloading map…')
-      await sleep(1200)
-      reset(); onSuccess()
-    } catch (err) {
-      setError(err.message); setStep('validate')
-    }
-  }
+  // ── Step 4: upload to server ───────────────────────────────────────────────
+  async function startServerUpload() {
+    if (!csvFile) return
+    setProgress(10)
+    setStatusText('Uploading to server…')
 
-  async function pollBuild() {
-    for (let i = 0; i < 60; i++) {
-      await sleep(2000)
-      const s = await fetchStatus()
-      if (!s.build_running) {
-        if (s.build_result?.success) {
-          setStatusText(`Built ${(s.build_result.valid ?? 0).toLocaleString()} entities`)
-          setProgress(90); return
-        }
-        if (s.build_result?.error) throw new Error(s.build_result.error)
-      }
-      setProgress(40 + Math.min(45, i * 2))
-      setStatusText(`Building… ${(s.n_entities ?? 0).toLocaleString()} entities`)
+    try {
+      const selectedArr = [...selected]
+      await uploadCSV(csvFile, selectedArr, displayField)
+
+      // Persist raw CSV to IndexedDB so it can be auto-reuploaded on session expiry
+      await saveCSV(csvFile, { displayField, extraFields: selectedArr })
+
+      setProgress(95)
+      setStatusText('Build started on server…')
+      await sleep(500)
+      setProgress(100)
+      setStatusText('Ready!')
+      await sleep(900)
+      reset()
+      onSuccess({ isLocal: false })
+    } catch (err) {
+      setError(`Upload failed: ${err.message}`)
+      setStep('validate')
     }
-    throw new Error('Build timed out.')
   }
 
   // ── Drag-and-drop ──────────────────────────────────────────────────────────
@@ -173,25 +174,26 @@ export default function UploadModal({ open, onClose, onSuccess }) {
         <div className="modal-header">
           <div>
             <h2 className="modal-title">
-              { step === 'pick'      && 'Upload Locations' }
-              { step === 'schema'    && 'Select Extra Fields' }
-              { step === 'validate'  && 'Validation Results' }
-              { step === 'uploading' && 'Uploading…' }
+              { step === 'pick'       && 'Upload Locations' }
+              { step === 'schema'     && 'Select Extra Fields' }
+              { step === 'validate'   && 'Validation Results' }
+              { step === 'processing' && 'Processing…' }
             </h2>
             <p className="modal-sub">
-              { step === 'pick'     && 'Replace the current dataset' }
-              { step === 'schema'   && `${csvRowCount.toLocaleString()} rows · choose which columns to store` }
-              { step === 'validate' && `${csvFile?.name}` }
+              { step === 'pick'       && 'Load your dataset into this browser' }
+              { step === 'schema'     && `${csvRowCount.toLocaleString()} rows · choose which columns to store` }
+              { step === 'validate'   && `${csvFile?.name}` }
+              { step === 'processing' && 'Uploading to server…' }
             </p>
           </div>
           <button className="btn-close" onClick={handleClose}
-            disabled={step === 'uploading'} aria-label="Close">
+            disabled={step === 'processing'} aria-label="Close">
             <X size={16} />
           </button>
         </div>
 
         {/* ── Step indicator ── */}
-        {step !== 'uploading' && (
+        {step !== 'processing' && (
           <div className="upload-steps">
             {['pick','schema','validate'].map((s, i) => (
               <div key={s} className={`upload-step ${step === s ? 'active' : ''} ${
@@ -216,7 +218,13 @@ export default function UploadModal({ open, onClose, onSuccess }) {
               <input ref={fileInputRef} type="file" accept=".csv" hidden
                 onChange={e => handleFile(e.target.files?.[0])} />
             </div>
-            <p className="modal-format">Required: <code>lat</code>, <code>lng</code> — Optional: <code>id</code>, any extra columns</p>
+            <p className="modal-format">
+              Required: <code>lat</code>, <code>lng</code> — Optional: <code>id</code>, any extra columns
+            </p>
+            <p className="modal-local-note">
+              Your CSV is uploaded to the server for geocoding. The raw file is also saved
+              in this browser so data restores automatically if the session expires.
+            </p>
             {error && <p className="upload-error">{error}</p>}
           </>
         )}
@@ -253,50 +261,29 @@ export default function UploadModal({ open, onClose, onSuccess }) {
                 <div className="schema-hint">
                   {selectedArr.length} field{selectedArr.length !== 1 ? 's' : ''} selected
                 </div>
-
-                {/* Display Field Selector */}
-                <div className="schema-section-label" style={{marginTop:'20px'}}>
-                  Label field — shown on map markers
-                </div>
-                <div className="display-field-selector">
-                  <select 
-                    value={displayField} 
-                    onChange={(e) => setDisplayField(e.target.value)}
-                    className="display-field-select"
-                  >
-                    {csvHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                  <div className="display-field-hint">
-                    This field will appear as the location label on the map
-                  </div>
-                </div>
               </>
             ) : (
-              <>
-                <p className="schema-no-extra">No extra columns detected. Only lat/lng/id will be stored.</p>
-                
-                {/* Display Field Selector for when there are no extra fields */}
-                <div className="schema-section-label" style={{marginTop:'20px'}}>
-                  Label field — shown on map markers
-                </div>
-                <div className="display-field-selector">
-                  <select 
-                    value={displayField} 
-                    onChange={(e) => setDisplayField(e.target.value)}
-                    className="display-field-select"
-                  >
-                    {csvHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                  <div className="display-field-hint">
-                    This field will appear as the location label on the map
-                  </div>
-                </div>
-              </>
+              <p className="schema-no-extra">No extra columns detected. Only lat/lng/id will be stored.</p>
             )}
+
+            {/* Display Field Selector */}
+            <div className="schema-section-label" style={{marginTop:'20px'}}>
+              Label field — shown on map markers
+            </div>
+            <div className="display-field-selector">
+              <select
+                value={displayField}
+                onChange={e => setDisplayField(e.target.value)}
+                className="display-field-select"
+              >
+                {csvHeaders.map(h => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+              <div className="display-field-hint">
+                This field will appear as the location label on the map
+              </div>
+            </div>
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setStep('pick')}>Back</button>
@@ -346,15 +333,15 @@ export default function UploadModal({ open, onClose, onSuccess }) {
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={() => setStep('schema')}>Back</button>
-              <button className="btn-action" onClick={startUpload}>
-                {issues.length > 0 ? 'Upload anyway' : 'Upload'}
+              <button className="btn-action" onClick={() => setStep('processing')}>
+                {issues.length > 0 ? 'Upload anyway' : 'Upload to server'}
               </button>
             </div>
           </>
         )}
 
-        {/* ════════════════ STEP 4: UPLOADING ════════════════ */}
-        {step === 'uploading' && (
+        {/* ════════════════ STEP 4: PROCESSING ════════════════ */}
+        {step === 'processing' && (
           <div className="upload-progress">
             <div className="progress-track">
               <div className={`progress-fill ${progress === 100 ? 'done' : ''}`}

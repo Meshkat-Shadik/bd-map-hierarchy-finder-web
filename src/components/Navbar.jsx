@@ -1,6 +1,6 @@
-import { RotateCcw, Upload } from './Icons'
+import { RotateCcw, Upload, Moon, Sun } from './Icons'
 
-export default function Navbar({ entityCount, peerMeta, peerMode, onReset, onExitPeerMode, onUploadClick }) {
+export default function Navbar({ entityCount, peerMeta, peerMode, theme, onThemeChange, onReset, onExitPeerMode, onUploadClick }) {
   return (
     <nav className="navbar">
       <div className="nav-brand">
@@ -23,6 +23,9 @@ export default function Navbar({ entityCount, peerMeta, peerMode, onReset, onExi
       </div>
 
       <div className="nav-actions">
+        <button className="btn-icon" onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} title="Toggle theme">
+          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
         {peerMode ? (
           <button className="btn-exit" onClick={onExitPeerMode} title="Exit explore mode">
             ✕ Exit explore

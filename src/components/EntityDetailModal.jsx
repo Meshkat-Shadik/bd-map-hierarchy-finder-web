@@ -1,4 +1,5 @@
-import { X } from './Icons'
+import { useState } from 'react'
+import { X, Info } from './Icons'
 
 // ── Field type detection ──────────────────────────────────────────────────────
 function detectType(key) {
@@ -75,8 +76,23 @@ function getCrumbs(hierarchy) {
     .map(l => hierarchy[l].name)
 }
 
+function geocodeLevelName(len) {
+  if (len === 2)  return 'Division'
+  if (len === 4)  return 'District'
+  if (len === 6)  return 'City Corporation'
+  if (len === 8)  return 'Upazila'
+  if (len === 10) return 'Municipality'
+  if (len === 13) return 'Union'
+  if (len === 16) return 'Mauza'
+  if (len === 20) return 'Village'
+  if (len === 22) return 'Enumeration Area (EA)'
+  return 'Location'
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
-export default function EntityDetailModal({ entity, loading, schema, onClose }) {
+export default function EntityDetailModal({ entity, loading, onClose }) {
+  const [geocodeOpen, setGeocodeOpen] = useState(false)
+
   if (!entity) return null
 
   const isLoading = entity._loading || loading
@@ -85,6 +101,9 @@ export default function EntityDetailModal({ entity, loading, schema, onClose }) 
   const groups    = hasFields ? groupMetadata(metadata) : []
   const crumbs    = getCrumbs(entity.hierarchy)
 
+  const gc      = entity.geocode ?? ''
+  const gcLevel = geocodeLevelName(gc.length)
+
   return (
     <div className="detail-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="detail-modal animate-fade-in">
@@ -92,11 +111,29 @@ export default function EntityDetailModal({ entity, loading, schema, onClose }) 
         {/* ── Header ── */}
         <div className="detail-header">
           <div className="detail-id-block">
-            <div className="detail-entity-id">{entity.id}</div>
+            <div className="detail-entity-id">{entity.label ?? entity.id}</div>
             {!isLoading && entity.lat && (
               <div className="detail-coords">
                 {entity.lat.toFixed(5)}°N, {entity.lng.toFixed(5)}°E
-                {entity.geocode && <code className="geocode detail-geocode">{entity.geocode}</code>}
+                {gc && (
+                  <div className="geocode-row">
+                    <code className="geocode detail-geocode">{gc}</code>
+                    <button
+                      className="btn-geocode-info"
+                      onClick={() => setGeocodeOpen(v => !v)}
+                      aria-label="What is this code?"
+                    >
+                      <Info size={11} />
+                    </button>
+                  </div>
+                )}
+                {geocodeOpen && (
+                  <div className="geocode-popover">
+                    <strong>BD Administrative Geocode</strong>
+                    <p>A {gc.length}-character code identifying this location at the <strong>{gcLevel}</strong> level in Bangladesh's administrative hierarchy.</p>
+                    <p className="geocode-popover-levels">2=Division · 4=District · 8=Upazila · 13=Union · 16=Mauza · 22=EA</p>
+                  </div>
+                )}
               </div>
             )}
           </div>

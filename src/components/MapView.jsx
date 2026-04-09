@@ -95,12 +95,26 @@ export default function MapView({
     mapRef.current.getContainer().style.cursor = peerMode ? 'default' : ''
   }, [peerMode])
 
-  // ── Pan to selected entity ────────────────────────────────────────────────
+  // ── Fly to selected entity ────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedId || !entities[selectedId] || !mapRef.current) return
+    if (peerIds !== null) return   // don't fly when peer area is already shown
     const { lat, lng } = entities[selectedId]
-    mapRef.current.panTo([lat, lng], { animate: true, duration: 0.5 })
+    const currentZoom = mapRef.current.getZoom()
+    const targetZoom  = Math.max(currentZoom, 13)
+    mapRef.current.flyTo([lat, lng], targetZoom, { duration: 1.0, easeLinearity: 0.25 })
   }, [selectedId])
+
+  // ── Fly to bounds of peer area ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!peerIds || peerIds.size === 0 || !mapRef.current) return
+    const latlngs = Object.values(entities)
+      .filter(e => peerIds.has(e.id))
+      .map(e => [e.lat, e.lng])
+    if (latlngs.length === 0) return
+    const bounds = L.latLngBounds(latlngs)
+    mapRef.current.flyToBounds(bounds, { padding: [60, 60], maxZoom: 14, duration: 1.2 })
+  }, [peerIds])
 
   return <div ref={containerRef} className="map-container" />
 }
